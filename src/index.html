@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; media-src 'self' file:; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+<title>Gravador de Tela</title>
+<link rel="stylesheet" href="styles/fluent.css" />
+<link rel="stylesheet" href="styles/app.css" />
+</head>
+<body>
+
+  <!-- Custom Windows 11 style titlebar -->
+  <header id="titlebar">
+    <div class="titlebar-drag">
+      <img class="titlebar-logo" src="assets/logo.svg" alt="" />
+      <span class="titlebar-title">Gravador de Tela</span>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btn-min" class="titlebar-btn" title="Minimizar" aria-label="Minimizar"></button>
+      <button id="btn-max" class="titlebar-btn" title="Maximizar" aria-label="Maximizar"></button>
+      <button id="btn-close" class="titlebar-btn titlebar-btn-close" title="Fechar" aria-label="Fechar"></button>
+    </div>
+  </header>
+
+  <div id="app-shell">
+    <nav id="sidebar">
+      <div class="nav-group">
+        <button class="nav-item is-active" data-view="record">
+          <span class="nav-icon" data-icon="record-dot"></span>
+          <span class="nav-label">Gravar</span>
+        </button>
+        <button class="nav-item" data-view="editor">
+          <span class="nav-icon" data-icon="edit"></span>
+          <span class="nav-label">Editor</span>
+        </button>
+        <button class="nav-item" data-view="library">
+          <span class="nav-icon" data-icon="folder"></span>
+          <span class="nav-label">Gravações</span>
+        </button>
+      </div>
+      <div class="nav-group nav-group-bottom">
+        <button id="btn-theme" class="nav-item" data-action="toggle-theme">
+          <span class="nav-icon" data-icon="theme"></span>
+          <span class="nav-label">Aparência</span>
+        </button>
+      </div>
+    </nav>
+
+    <main id="views">
+
+      <!-- ===================== VIEW: GRAVAR ===================== -->
+      <section id="view-record" class="view is-active">
+        <div class="view-scroll">
+          <header class="view-header">
+            <h1>Gravar tela</h1>
+            <p class="view-subtitle">Grave sua tela com acompanhamento suave do cursor, ideal para tutoriais.</p>
+          </header>
+
+          <div class="record-layout">
+            <div class="card source-card">
+              <div class="card-title-row">
+                <h2>Origem</h2>
+                <button id="btn-pick-source" class="btn btn-secondary btn-small">
+                  <span class="icon" data-icon="swap"></span> Escolher
+                </button>
+              </div>
+              <div id="source-preview" class="source-preview">
+                <div class="source-preview-empty">
+                  <span class="icon icon-xl" data-icon="screen"></span>
+                  <p>Nenhuma origem selecionada</p>
+                  <button id="btn-pick-source-2" class="btn btn-accent">Selecionar tela ou janela</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card options-card">
+              <h2>Áudio</h2>
+              <div id="audio-mode" class="segmented" role="radiogroup" aria-label="Modo de áudio">
+                <button class="segmented-item is-active" data-audio="none" role="radio" aria-checked="true">
+                  <span class="icon" data-icon="mic-off"></span> Sem áudio
+                </button>
+                <button class="segmented-item" data-audio="mic" role="radio" aria-checked="false">
+                  <span class="icon" data-icon="mic"></span> Microfone
+                </button>
+                <button class="segmented-item" data-audio="system" role="radio" aria-checked="false">
+                  <span class="icon" data-icon="speaker"></span> Áudio do sistema
+                </button>
+                <button class="segmented-item" data-audio="both" role="radio" aria-checked="false">
+                  <span class="icon" data-icon="mic"></span>+<span class="icon" data-icon="speaker"></span> Ambos
+                </button>
+              </div>
+
+              <div class="option-row">
+                <div class="option-text">
+                  <h3>Seguir o cursor do mouse</h3>
+                  <p>Aplica um zoom suave que acompanha o ponteiro — ótimo para instruções. Disponível apenas ao gravar uma tela inteira.</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="toggle-follow-cursor" checked />
+                  <span class="switch-track"><span class="switch-thumb"></span></span>
+                </label>
+              </div>
+
+              <div id="zoom-level-row" class="option-row">
+                <div class="option-text">
+                  <h3>Nível do zoom</h3>
+                  <p id="zoom-level-value">1.8×</p>
+                </div>
+                <input type="range" id="zoom-level" min="1.2" max="3" step="0.1" value="1.8" class="slider" />
+              </div>
+
+              <div class="option-row">
+                <div class="option-text">
+                  <h3>Nome da gravação</h3>
+                </div>
+                <input type="text" id="recording-name" class="text-input" placeholder="Gravação sem título" />
+              </div>
+            </div>
+          </div>
+
+          <div class="record-controls">
+            <div id="record-timer" class="record-timer">00:00</div>
+            <button id="btn-record" class="record-button" title="Iniciar gravação" aria-label="Iniciar gravação">
+              <span class="record-button-dot"></span>
+            </button>
+            <div class="record-controls-row">
+              <button id="btn-pause" class="btn btn-secondary" disabled>
+                <span class="icon" data-icon="pause"></span> Pausar
+              </button>
+              <button id="btn-stop" class="btn btn-danger" disabled>
+                <span class="icon" data-icon="stop"></span> Parar e salvar
+              </button>
+            </div>
+            <p id="record-hint" class="record-hint">Selecione uma origem para começar</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== VIEW: EDITOR ===================== -->
+      <section id="view-editor" class="view">
+        <div class="editor-layout">
+          <header class="editor-toolbar">
+            <div class="editor-toolbar-left">
+              <button id="btn-import-video" class="btn btn-secondary btn-small">
+                <span class="icon" data-icon="folder-open"></span> Importar vídeo
+              </button>
+              <span id="editor-filename" class="editor-filename"></span>
+            </div>
+            <div class="editor-toolbar-right">
+              <button id="btn-export" class="btn btn-accent" disabled>
+                <span class="icon" data-icon="export"></span> Exportar vídeo
+              </button>
+            </div>
+          </header>
+
+          <div class="editor-body">
+            <div class="editor-stage-wrap">
+              <div id="editor-empty" class="editor-empty">
+                <span class="icon icon-xl" data-icon="edit"></span>
+                <p>Abra uma gravação na biblioteca ou importe um vídeo para começar a editar</p>
+                <button id="btn-import-video-2" class="btn btn-accent">Importar vídeo</button>
+              </div>
+              <div id="editor-stage" class="editor-stage" hidden>
+                <div class="stage-canvas-wrap" id="stage-canvas-wrap">
+                  <video id="editor-video" playsinline></video>
+                  <canvas id="editor-canvas"></canvas>
+                  <div id="overlay-layer" class="overlay-layer"></div>
+                </div>
+                <div class="stage-transport">
+                  <button id="btn-play" class="btn-icon-round" title="Reproduzir">
+                    <span class="icon" data-icon="play"></span>
+                  </button>
+                  <span id="time-current" class="stage-time">00:00</span>
+                  <input type="range" id="scrubber" class="slider scrubber" min="0" max="1000" value="0" />
+                  <span id="time-total" class="stage-time">00:00</span>
+                  <button id="btn-mute" class="btn-icon-round" title="Silenciar">
+                    <span class="icon" data-icon="speaker"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <aside id="properties-panel" class="properties-panel">
+              <div class="panel-section">
+                <h3>Ferramentas</h3>
+                <div class="tool-grid">
+                  <button id="tool-cut" class="tool-btn" disabled>
+                    <span class="icon" data-icon="cut"></span>
+                    <span>Cortar</span>
+                  </button>
+                  <button id="tool-zoom" class="tool-btn" disabled>
+                    <span class="icon" data-icon="zoom"></span>
+                    <span>Zoom</span>
+                  </button>
+                  <button id="tool-text" class="tool-btn" disabled>
+                    <span class="icon" data-icon="text"></span>
+                    <span>Texto</span>
+                  </button>
+                  <button id="tool-arrow" class="tool-btn" disabled>
+                    <span class="icon" data-icon="arrow"></span>
+                    <span>Seta</span>
+                  </button>
+                </div>
+              </div>
+              <div id="panel-context" class="panel-section panel-context">
+                <h3>Propriedades</h3>
+                <p class="panel-hint">Selecione um item na linha do tempo para editar suas propriedades.</p>
+              </div>
+            </aside>
+          </div>
+
+          <div id="editor-timeline" class="editor-timeline">
+            <div class="timeline-toolbar">
+              <button id="btn-mark-cut" class="btn btn-secondary btn-small" disabled>
+                <span class="icon" data-icon="cut"></span> Marcar corte na posição atual
+              </button>
+              <span class="timeline-toolbar-spacer"></span>
+              <span id="timeline-duration" class="timeline-duration">00:00</span>
+            </div>
+            <div class="timeline-tracks" id="timeline-tracks">
+              <div class="track track-video">
+                <div class="track-label">Vídeo</div>
+                <div class="track-lane" id="lane-video">
+                  <div class="thumb-strip" id="thumb-strip"></div>
+                  <div class="trim-region trim-start" id="trim-start"></div>
+                  <div class="trim-region trim-end" id="trim-end"></div>
+                  <div id="cuts-container"></div>
+                </div>
+              </div>
+              <div class="track track-zoom">
+                <div class="track-label">Zoom</div>
+                <div class="track-lane" id="lane-zoom"></div>
+              </div>
+              <div class="track track-overlay">
+                <div class="track-label">Texto/Setas</div>
+                <div class="track-lane" id="lane-overlay"></div>
+              </div>
+              <div class="playhead" id="playhead"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== VIEW: BIBLIOTECA ===================== -->
+      <section id="view-library" class="view">
+        <div class="view-scroll">
+          <header class="view-header view-header-row">
+            <div>
+              <h1>Gravações</h1>
+              <p class="view-subtitle">Seus vídeos gravados, salvos em MP4.</p>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="search" id="library-search" class="text-input" placeholder="Buscar gravações..." />
+              <button id="btn-open-folder" class="btn btn-secondary btn-small">
+                <span class="icon" data-icon="folder-open"></span> Abrir pasta
+              </button>
+            </div>
+          </header>
+          <div id="library-empty" class="library-empty">
+            <span class="icon icon-xl" data-icon="folder"></span>
+            <p>Você ainda não tem gravações. Vá até "Gravar" para começar.</p>
+          </div>
+          <div id="library-grid" class="library-grid"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Modal root (source picker, confirmations, progress) -->
+  <div id="modal-root"></div>
+  <div id="toast-container"></div>
+
+  <script type="module" src="renderer/app.js"></script>
+</body>
+</html>
