@@ -43,12 +43,19 @@ function currentQualityPreset() {
   return QUALITY_PRESETS[state.quality] || QUALITY_PRESETS['1080p'];
 }
 
-// Fixed presets are tuned for 30fps; scale proportionally for other rates
-// so higher frame rates don't starve for bits and look blocky.
+const SUPPORTED_FPS = [15, 24, 30, 60, 90, 120];
+
+// Bitrate per quality/fps combo (Mbps), tuned so higher frame rates don't
+// starve for bits and look blocky.
+const BITRATE_MBPS = {
+  '720p': { 15: 3, 24: 4, 30: 5, 60: 7.5, 90: 9, 120: 10 },
+  '1080p': { 15: 5, 24: 6.5, 30: 8, 60: 12, 90: 15, 120: 18 }
+};
+
 function computeVideoBitsPerSecond() {
-  const base = state.quality === '720p' ? 5_000_000 : 8_000_000;
-  const ratio = clamp(state.fps / 30, 0.6, 2.2);
-  return Math.round(base * ratio);
+  const table = BITRATE_MBPS[state.quality] || BITRATE_MBPS['1080p'];
+  const mbps = table[state.fps] || table[30];
+  return Math.round(mbps * 1_000_000);
 }
 
 let mediaRecorder = null;
@@ -138,7 +145,7 @@ async function loadInitialSettings() {
   const settings = await window.api.getSettings();
   state.audioMode = settings.audioMode || 'none';
   state.quality = QUALITY_PRESETS[settings.quality] ? settings.quality : '1080p';
-  state.fps = [15, 24, 30, 60].includes(Number(settings.frameRate)) ? Number(settings.frameRate) : 30;
+  state.fps = SUPPORTED_FPS.includes(Number(settings.frameRate)) ? Number(settings.frameRate) : 30;
   state.followCursor = settings.followCursorDefault !== false;
   state.zoomLevel = settings.zoomLevel || 1.8;
 
