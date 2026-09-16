@@ -8,6 +8,8 @@ Construído com [Electron](https://www.electronjs.org/) + JavaScript puro (sem f
 
 ### Gravação
 - Escolha entre gravar a **tela inteira** ou uma **janela específica**, com miniaturas de pré-visualização.
+- **Qualidade de vídeo**: grave em **720p** ou **1080p**. A resolução de captura, o bitrate e a conversão final para MP4 são ajustados automaticamente para o nível escolhido, evitando vídeos borrados por causa de um bitrate baixo demais para a resolução da tela.
+- **Taxa de quadros (FPS)**: escolha entre **15, 24, 30 ou 60 fps** para controlar a fluidez da gravação.
 - Grave **com ou sem áudio**: nenhum, apenas microfone, apenas áudio do sistema, ou os dois misturados.
 - **Acompanhar o cursor do mouse**: ao gravar uma tela inteira, o app pode aplicar um zoom suave que segue o ponteiro automaticamente — ideal para gravar tutoriais e instruções apontando elementos na tela. O nível de zoom é ajustável.
 - Contagem regressiva antes de iniciar, cronômetro, pausar/retomar e um indicativo flutuante de "gravando" visível em qualquer tela do app.

@@ -74,7 +74,22 @@
             </div>
 
             <div class="card options-card">
-              <h2>Áudio</h2>
+              <h2>Vídeo</h2>
+              <h3 class="segmented-label">Qualidade</h3>
+              <div id="quality-mode" class="segmented" role="radiogroup" aria-label="Qualidade de vídeo">
+                <button class="segmented-item" data-quality="720p" role="radio" aria-checked="false">720p</button>
+                <button class="segmented-item is-active" data-quality="1080p" role="radio" aria-checked="true">1080p</button>
+              </div>
+
+              <h3 class="segmented-label segmented-label-spaced">Taxa de quadros (FPS)</h3>
+              <div id="fps-mode" class="segmented" role="radiogroup" aria-label="Taxa de quadros por segundo">
+                <button class="segmented-item" data-fps="15" role="radio" aria-checked="false">15</button>
+                <button class="segmented-item" data-fps="24" role="radio" aria-checked="false">24</button>
+                <button class="segmented-item is-active" data-fps="30" role="radio" aria-checked="true">30</button>
+                <button class="segmented-item" data-fps="60" role="radio" aria-checked="false">60</button>
+              </div>
+
+              <h2 style="margin-top:22px;">Áudio</h2>
               <div id="audio-mode" class="segmented" role="radiogroup" aria-label="Modo de áudio">
                 <button class="segmented-item is-active" data-audio="none" role="radio" aria-checked="true">
                   <span class="icon" data-icon="mic-off"></span> Sem áudio

@@ -207,6 +207,8 @@
 }
 
 .options-card h2 { margin-bottom: 12px; }
+.segmented-label { margin-bottom: 8px; color: var(--text-secondary); }
+.segmented-label-spaced { margin-top: 16px; }
 .option-row {
   display: flex;
   align-items: center;

@@ -5,6 +5,8 @@ const els = {
   pickBtn: document.getElementById('btn-pick-source'),
   pickBtn2: document.getElementById('btn-pick-source-2'),
   preview: document.getElementById('source-preview'),
+  qualityGroup: document.getElementById('quality-mode'),
+  fpsGroup: document.getElementById('fps-mode'),
   audioGroup: document.getElementById('audio-mode'),
   followToggle: document.getElementById('toggle-follow-cursor'),
   zoomRow: document.getElementById('zoom-level-row'),
@@ -21,12 +23,33 @@ const els = {
 const state = {
   selectedSource: null,
   audioMode: 'none',
+  quality: '1080p',
+  fps: 30,
   followCursor: true,
   zoomLevel: 1.8,
   displays: [],
   recording: false,
   paused: false
 };
+
+// Target capture resolution per quality preset (16:9). Used both to
+// constrain getDisplayMedia and to cap the follow-cursor canvas size.
+const QUALITY_PRESETS = {
+  '720p': { width: 1280, height: 720 },
+  '1080p': { width: 1920, height: 1080 }
+};
+
+function currentQualityPreset() {
+  return QUALITY_PRESETS[state.quality] || QUALITY_PRESETS['1080p'];
+}
+
+// Fixed presets are tuned for 30fps; scale proportionally for other rates
+// so higher frame rates don't starve for bits and look blocky.
+function computeVideoBitsPerSecond() {
+  const base = state.quality === '720p' ? 5_000_000 : 8_000_000;
+  const ratio = clamp(state.fps / 30, 0.6, 2.2);
+  return Math.round(base * ratio);
+}
 
 let mediaRecorder = null;
 let activeStreams = []; // all MediaStream objects we must stop() on cleanup
@@ -52,6 +75,28 @@ export function initRecorder({ onSaved }) {
 
   els.pickBtn.addEventListener('click', pickSource);
   els.pickBtn2.addEventListener('click', pickSource);
+
+  els.qualityGroup.querySelectorAll('.segmented-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.quality = btn.dataset.quality;
+      els.qualityGroup.querySelectorAll('.segmented-item').forEach((b) => {
+        b.classList.toggle('is-active', b === btn);
+        b.setAttribute('aria-checked', String(b === btn));
+      });
+      window.api.setSettings({ quality: state.quality });
+    });
+  });
+
+  els.fpsGroup.querySelectorAll('.segmented-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.fps = Number(btn.dataset.fps);
+      els.fpsGroup.querySelectorAll('.segmented-item').forEach((b) => {
+        b.classList.toggle('is-active', b === btn);
+        b.setAttribute('aria-checked', String(b === btn));
+      });
+      window.api.setSettings({ frameRate: state.fps });
+    });
+  });
 
   els.audioGroup.querySelectorAll('.segmented-item').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -92,9 +137,21 @@ export function initRecorder({ onSaved }) {
 async function loadInitialSettings() {
   const settings = await window.api.getSettings();
   state.audioMode = settings.audioMode || 'none';
+  state.quality = QUALITY_PRESETS[settings.quality] ? settings.quality : '1080p';
+  state.fps = [15, 24, 30, 60].includes(Number(settings.frameRate)) ? Number(settings.frameRate) : 30;
   state.followCursor = settings.followCursorDefault !== false;
   state.zoomLevel = settings.zoomLevel || 1.8;
 
+  els.qualityGroup.querySelectorAll('.segmented-item').forEach((b) => {
+    const active = b.dataset.quality === state.quality;
+    b.classList.toggle('is-active', active);
+    b.setAttribute('aria-checked', String(active));
+  });
+  els.fpsGroup.querySelectorAll('.segmented-item').forEach((b) => {
+    const active = Number(b.dataset.fps) === state.fps;
+    b.classList.toggle('is-active', active);
+    b.setAttribute('aria-checked', String(active));
+  });
   els.audioGroup.querySelectorAll('.segmented-item').forEach((b) => {
     const active = b.dataset.audio === state.audioMode;
     b.classList.toggle('is-active', active);
@@ -258,9 +315,14 @@ async function startRecording() {
 
   await window.api.setPendingSource({ sourceId: source.id, audioMode });
 
+  const preset = currentQualityPreset();
   const wantsAnyAudio = audioMode !== 'none';
   const displayStream = await navigator.mediaDevices.getDisplayMedia({
-    video: true,
+    video: {
+      width: { ideal: preset.width, max: preset.width },
+      height: { ideal: preset.height, max: preset.height },
+      frameRate: { ideal: state.fps, max: state.fps }
+    },
     audio: wantsAnyAudio
   });
   activeStreams.push(displayStream);
@@ -286,7 +348,7 @@ async function startRecording() {
 
   const willFollow = state.followCursor && source.isScreen;
   const videoTrack = willFollow
-    ? await buildFollowCursorVideoTrack(displayStream, source)
+    ? await buildFollowCursorVideoTrack(displayStream, source, preset)
     : displayStream.getVideoTracks()[0];
 
   const tracks = [videoTrack];
@@ -300,7 +362,7 @@ async function startRecording() {
   const mimeType = pickMimeType();
   mediaRecorder = new MediaRecorder(finalStream, {
     mimeType: mimeType || undefined,
-    videoBitsPerSecond: 8_000_000
+    videoBitsPerSecond: computeVideoBitsPerSecond()
   });
 
   const begin = await window.api.streamBegin();
@@ -359,7 +421,7 @@ function buildAudioTrack(audioMode, displayStream, micStream) {
   return sysTrack || micTrack || null;
 }
 
-async function buildFollowCursorVideoTrack(displayStream, source) {
+async function buildFollowCursorVideoTrack(displayStream, source, preset) {
   const video = document.createElement('video');
   video.muted = true;
   video.srcObject = new MediaStream([displayStream.getVideoTracks()[0]]);
@@ -369,7 +431,7 @@ async function buildFollowCursorVideoTrack(displayStream, source) {
     else video.addEventListener('loadedmetadata', () => resolve(), { once: true });
   });
 
-  const maxDim = 1920;
+  const maxDim = preset.width;
   let vw = video.videoWidth;
   let vh = video.videoHeight;
   if (vw > maxDim) {
@@ -416,7 +478,7 @@ async function buildFollowCursorVideoTrack(displayStream, source) {
   }
   draw();
 
-  const stream = canvas.captureStream(30);
+  const stream = canvas.captureStream(state.fps);
   return stream.getVideoTracks()[0];
 }
 
@@ -492,7 +554,9 @@ async function finishRecording() {
       name: els.nameInput.value.trim(),
       duration: finalElapsed,
       hasAudio: audioTracksPresent,
-      followCursor: state.followCursor && state.selectedSource && state.selectedSource.isScreen
+      followCursor: state.followCursor && state.selectedSource && state.selectedSource.isScreen,
+      quality: state.quality,
+      fps: state.fps
     });
     progress.close();
     if (result.success) {
@@ -545,6 +609,8 @@ function updateUiRecording(isRecording) {
   els.stopBtn.disabled = !isRecording;
   els.pickBtn.disabled = isRecording;
   els.pickBtn2.disabled = isRecording;
+  els.qualityGroup.querySelectorAll('.segmented-item').forEach((b) => (b.disabled = isRecording));
+  els.fpsGroup.querySelectorAll('.segmented-item').forEach((b) => (b.disabled = isRecording));
   els.audioGroup.querySelectorAll('.segmented-item').forEach((b) => (b.disabled = isRecording));
   els.followToggle.disabled = isRecording || !(state.selectedSource && state.selectedSource.isScreen);
   els.zoomSlider.disabled = isRecording;

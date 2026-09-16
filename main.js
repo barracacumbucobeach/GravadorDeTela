@@ -29,8 +29,15 @@ const DEFAULT_SETTINGS = {
   theme: 'light',
   followCursorDefault: true,
   zoomLevel: 1.8,
-  audioMode: 'mic'
+  audioMode: 'mic',
+  quality: '1080p',
+  frameRate: 30
 };
+
+// Target output height for each quality preset; used as a safety-net
+// downscale in ffmpeg so the final file always matches what was chosen,
+// even if the capture stream came in at a different native resolution.
+const QUALITY_HEIGHTS = { '720p': 720, '1080p': 1080 };
 
 let mainWindow = null;
 let cursorInterval = null;
@@ -258,11 +265,19 @@ ipcMain.handle('stream:abort', async (_e, { sessionId }) => {
 // ---------------------------------------------------------------------------
 // ffmpeg helpers
 // ---------------------------------------------------------------------------
-function convertToMp4(inputPath, outputPath, totalDurationSec, onProgress) {
+function convertToMp4(inputPath, outputPath, totalDurationSec, onProgress, videoOptions = {}) {
   return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .videoCodec('libx264')
-      .outputOptions(['-preset veryfast', '-crf 20', '-pix_fmt yuv420p', '-movflags +faststart'])
+    const outputOptions = ['-preset veryfast', '-crf 20', '-pix_fmt yuv420p', '-movflags +faststart'];
+    if (videoOptions.fps) outputOptions.push(`-r ${videoOptions.fps}`);
+
+    const command = ffmpeg(inputPath).videoCodec('libx264');
+    if (videoOptions.scaleHeight) {
+      // Never upscale a source that's already smaller than the target.
+      command.videoFilters(`scale=-2:min(${videoOptions.scaleHeight}\\,ih)`);
+    }
+
+    command
+      .outputOptions(outputOptions)
       .audioCodec('aac')
       .audioBitrate('160k')
       .on('progress', (p) => {
@@ -320,9 +335,15 @@ ipcMain.handle('recording:finalize', async (event, { tempPath, meta }) => {
   const jsonPath = path.join(RECORDINGS_DIR, `${finalName}.json`);
 
   try {
-    await convertToMp4(tempPath, outputPath, meta.duration, (percent) => {
-      if (!wc.isDestroyed()) wc.send('convert:progress', { percent, stage: 'recording' });
-    });
+    await convertToMp4(
+      tempPath,
+      outputPath,
+      meta.duration,
+      (percent) => {
+        if (!wc.isDestroyed()) wc.send('convert:progress', { percent, stage: 'recording' });
+      },
+      { scaleHeight: QUALITY_HEIGHTS[meta.quality] || null, fps: Number(meta.fps) || null }
+    );
     const duration = (await probeDuration(outputPath)) || meta.duration || 0;
     await makeThumbnail(outputPath, thumbPath, Math.min(1, duration / 2));
     const stats = await fsp.stat(outputPath);
@@ -336,7 +357,9 @@ ipcMain.handle('recording:finalize', async (event, { tempPath, meta }) => {
       size: stats.size,
       createdAt: Date.now(),
       hasAudio: !!meta.hasAudio,
-      followCursor: !!meta.followCursor
+      followCursor: !!meta.followCursor,
+      quality: meta.quality || null,
+      fps: Number(meta.fps) || null
     };
     await fsp.writeFile(jsonPath, JSON.stringify(record, null, 2), 'utf-8');
     fsp.unlink(tempPath).catch(() => {});
