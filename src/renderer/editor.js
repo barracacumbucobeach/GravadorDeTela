@@ -2,6 +2,7 @@ import { mountIcons } from './icons.js';
 import {
   formatTime,
   clamp,
+  lerp,
   uid,
   toast,
   escapeHtml,
@@ -13,6 +14,16 @@ import {
 
 const TEXT_COLORS = ['#ffffff', '#000000', '#e81123', '#0f78d4', '#107c10', '#ffd700'];
 const BG_COLORS = ['rgba(0,0,0,0.55)', 'rgba(255,255,255,0.85)', 'rgba(15,120,212,0.55)', 'transparent'];
+const CORNER_PRESETS = [
+  [0.05, 0.05], [0.5, 0.05], [0.95, 0.05],
+  [0.05, 0.5], [0.5, 0.5], [0.95, 0.5],
+  [0.05, 0.95], [0.5, 0.95], [0.95, 0.95]
+];
+
+function smoothstep(x) {
+  const t = clamp(x, 0, 1);
+  return t * t * (3 - 2 * t);
+}
 
 const els = {
   importBtn: document.getElementById('btn-import-video'),
@@ -237,17 +248,35 @@ function updateTransportUi() {
 // ---------------------------------------------------------------------------
 // Canvas rendering
 // ---------------------------------------------------------------------------
+// A zoom region eases in centered on point A, optionally pans across to
+// point B while fully zoomed in, then eases back out centered on B — this
+// is what lets a single zoom "move the screen" between two chosen spots.
 function computeZoomTransform(t) {
   const z = state.zooms.find((zz) => t >= zz.start && t <= zz.end);
   if (!z) return null;
   const inDur = Math.min(0.4, (z.end - z.start) / 3) || 0.001;
-  let localProgress = 1;
-  if (t - z.start < inDur) localProgress = (t - z.start) / inDur;
-  else if (z.end - t < inDur) localProgress = (z.end - t) / inDur;
-  localProgress = clamp(localProgress, 0, 1);
-  const ease = localProgress * localProgress * (3 - 2 * localProgress);
-  const scale = 1 + (z.scale - 1) * ease;
-  return { cx: z.cx, cy: z.cy, scale };
+  const easeInEnd = z.start + inDur;
+  const easeOutStart = z.end - inDur;
+
+  let scaleProgress;
+  let panProgress;
+  if (t < easeInEnd) {
+    scaleProgress = (t - z.start) / inDur;
+    panProgress = 0;
+  } else if (t > easeOutStart) {
+    scaleProgress = (z.end - t) / inDur;
+    panProgress = 1;
+  } else {
+    scaleProgress = 1;
+    const midDur = Math.max(0.001, easeOutStart - easeInEnd);
+    panProgress = (t - easeInEnd) / midDur;
+  }
+
+  const scale = 1 + (z.scale - 1) * smoothstep(scaleProgress);
+  const panEase = smoothstep(panProgress);
+  const cx = lerp(z.cx1, z.cx2, panEase);
+  const cy = lerp(z.cy1, z.cy2, panEase);
+  return { cx, cy, scale };
 }
 
 function drawFrame(t, burn) {
@@ -508,26 +537,64 @@ function removeOverlayDom(id) {
   overlayDomMap.delete(id);
 }
 
+// Two draggable markers (A = zoom-in point, B = zoom-out point) connected
+// by a dashed line, so a zoom can pan the view from one spot to another
+// while staying zoomed in, instead of only holding a single fixed point.
 function showZoomMarker(z) {
   removeZoomMarker();
-  zoomMarkerEl = document.createElement('div');
-  zoomMarkerEl.className = 'overlay-arrow-handle';
-  zoomMarkerEl.style.background = 'var(--zoom-color)';
-  zoomMarkerEl.style.width = '18px';
-  zoomMarkerEl.style.height = '18px';
-  zoomMarkerEl.style.left = `${z.cx * 100}%`;
-  zoomMarkerEl.style.top = `${z.cy * 100}%`;
-  els.overlayLayer.appendChild(zoomMarkerEl);
-  zoomMarkerEl.addEventListener('pointerdown', (e) => {
-    const rect = stageWrapRect();
-    startPointerDrag(e, (ev) => {
-      z.cx = clamp((ev.clientX - rect.left) / rect.width, 0, 1);
-      z.cy = clamp((ev.clientY - rect.top) / rect.height, 0, 1);
-      zoomMarkerEl.style.left = `${z.cx * 100}%`;
-      zoomMarkerEl.style.top = `${z.cy * 100}%`;
-      drawFrame(video.currentTime, false);
+  const inDur = Math.min(0.4, (z.end - z.start) / 3) || 0.001;
+
+  const wrap = document.createElement('div');
+  wrap.style.position = 'absolute';
+  wrap.style.inset = '0';
+  wrap.style.pointerEvents = 'none';
+  wrap.innerHTML = `
+    <svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;">
+      <line class="zoom-connector" stroke-dasharray="5,4" stroke-width="2" stroke="var(--zoom-color)" />
+    </svg>
+    <div class="zoom-marker zoom-marker-a" title="Ponto inicial do zoom (A)">A</div>
+    <div class="zoom-marker zoom-marker-b" title="Ponto final do zoom (B)">B</div>
+  `;
+  els.overlayLayer.appendChild(wrap);
+  zoomMarkerEl = wrap;
+
+  const line = wrap.querySelector('.zoom-connector');
+  const markerA = wrap.querySelector('.zoom-marker-a');
+  const markerB = wrap.querySelector('.zoom-marker-b');
+
+  function positionMarkers() {
+    markerA.style.left = `${z.cx1 * 100}%`;
+    markerA.style.top = `${z.cy1 * 100}%`;
+    markerB.style.left = `${z.cx2 * 100}%`;
+    markerB.style.top = `${z.cy2 * 100}%`;
+    line.setAttribute('x1', `${z.cx1 * 100}%`);
+    line.setAttribute('y1', `${z.cy1 * 100}%`);
+    line.setAttribute('x2', `${z.cx2 * 100}%`);
+    line.setAttribute('y2', `${z.cy2 * 100}%`);
+  }
+
+  const bindDrag = (markerEl, keyX, keyY, previewTime) => {
+    markerEl.style.pointerEvents = 'auto';
+    markerEl.addEventListener('pointerdown', (e) => {
+      if (video.currentTime < previewTime.min || video.currentTime > previewTime.max) {
+        seek(clamp(previewTime.target, previewTime.min, previewTime.max));
+      }
+      const rect = stageWrapRect();
+      startPointerDrag(e, (ev) => {
+        z[keyX] = clamp((ev.clientX - rect.left) / rect.width, 0, 1);
+        z[keyY] = clamp((ev.clientY - rect.top) / rect.height, 0, 1);
+        positionMarkers();
+        drawFrame(video.currentTime, false);
+      });
     });
-  });
+  };
+  // Jump the preview into the zone where each point is fully in control
+  // (A dominates during ease-in, B dominates from ease-out onward), so
+  // dragging a marker shows an immediate, correct preview.
+  bindDrag(markerA, 'cx1', 'cy1', { min: z.start, max: z.start + inDur, target: z.start + inDur / 2 });
+  bindDrag(markerB, 'cx2', 'cy2', { min: z.end - inDur, max: z.end, target: z.end - inDur / 2 });
+
+  positionMarkers();
 }
 
 function removeZoomMarker() {
@@ -788,7 +855,7 @@ function addZoom() {
     toast('Posicione o cursor com mais espaço antes do fim do vídeo.', 'error');
     return;
   }
-  const z = { id: uid(), start, end, cx: 0.5, cy: 0.5, scale: 1.8 };
+  const z = { id: uid(), start, end, cx1: 0.5, cy1: 0.5, cx2: 0.5, cy2: 0.5, scale: 1.8 };
   state.zooms.push(z);
   selectItem('zoom', z.id);
 }
@@ -918,7 +985,18 @@ function renderZoomPanel(id) {
       <div class="prop-field"><label>Fim (s)</label><input type="number" step="0.1" min="0" class="text-input" id="prop-end" value="${z.end.toFixed(1)}"></div>
     </div>
     <div class="prop-field"><label>Intensidade do zoom</label><input type="range" min="1.2" max="3" step="0.1" class="slider" style="width:100%" id="prop-scale" value="${z.scale}"></div>
-    <p class="panel-hint">Arraste o círculo roxo sobre o vídeo para posicionar o centro do zoom.</p>
+    <p class="panel-hint">Arraste os círculos <strong>A</strong> e <strong>B</strong> sobre o vídeo: o zoom começa em A e se move até B enquanto estiver ampliado — assim você mostra dois cantos diferentes num só zoom.</p>
+    <div class="prop-row">
+      <div class="prop-field">
+        <label>Início do zoom (A)</label>
+        <div class="corner-grid" id="corners-a"></div>
+      </div>
+      <div class="prop-field">
+        <label>Fim do zoom (B)</label>
+        <div class="corner-grid" id="corners-b"></div>
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-block" id="prop-no-pan">Zoom parado (não mover)</button>
     <button class="btn btn-danger btn-block" id="prop-delete"><span class="icon" data-icon="trash"></span> Remover zoom</button>
   `;
   mountIcons(els.panelContext);
@@ -926,19 +1004,53 @@ function renderZoomPanel(id) {
   els.panelContext.querySelector('#prop-start').addEventListener('change', (e) => {
     z.start = clamp(Number(e.target.value), state.trimStart, z.end - 0.2);
     renderTimeline();
+    showZoomMarker(z);
   });
   els.panelContext.querySelector('#prop-end').addEventListener('change', (e) => {
     z.end = clamp(Number(e.target.value), z.start + 0.2, state.trimEnd);
     renderTimeline();
+    showZoomMarker(z);
   });
   els.panelContext.querySelector('#prop-scale').addEventListener('input', (e) => {
     z.scale = Number(e.target.value);
     renderTimeline();
     drawFrame(video.currentTime, false);
   });
+
+  const refreshMarkersAndPreview = () => {
+    showZoomMarker(z);
+    renderTimeline();
+    drawFrame(video.currentTime, false);
+  };
+  buildCornerGrid(els.panelContext.querySelector('#corners-a'), (px, py) => {
+    z.cx1 = px;
+    z.cy1 = py;
+    refreshMarkersAndPreview();
+  });
+  buildCornerGrid(els.panelContext.querySelector('#corners-b'), (px, py) => {
+    z.cx2 = px;
+    z.cy2 = py;
+    refreshMarkersAndPreview();
+  });
+  els.panelContext.querySelector('#prop-no-pan').addEventListener('click', () => {
+    z.cx2 = z.cx1;
+    z.cy2 = z.cy1;
+    refreshMarkersAndPreview();
+  });
   els.panelContext.querySelector('#prop-delete').addEventListener('click', () => deleteItem('zoom', id));
 
   showZoomMarker(z);
+}
+
+function buildCornerGrid(container, onPick) {
+  container.innerHTML = '';
+  CORNER_PRESETS.forEach(([px, py]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'corner-btn';
+    btn.addEventListener('click', () => onPick(px, py));
+    container.appendChild(btn);
+  });
 }
 
 function renderTextPanel(id) {

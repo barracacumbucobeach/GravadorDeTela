@@ -16,7 +16,7 @@ Construído com [Electron](https://www.electronjs.org/) + JavaScript puro (sem f
 ### Editor de vídeo
 - Importe qualquer vídeo (`.mp4`, `.webm`, `.mov`, `.mkv`) ou abra uma gravação existente direto da biblioteca.
 - **Cortes**: marque o início e o fim de um trecho para removê-lo, além de arrastar as alças para aparar o início/fim do vídeo.
-- **Zoom**: crie regiões de zoom com entrada/saída suaves; arraste o alvo sobre o vídeo para escolher o ponto de foco e ajuste a intensidade.
+- **Zoom com movimento**: crie regiões de zoom com entrada/saída suaves; arraste os dois pontos **A** (início) e **B** (fim) sobre o vídeo — ou use os atalhos de canto — para que a câmera se mova de um canto a outro enquanto está ampliada, ajustando também a intensidade.
 - **Caixa de texto**: adicione textos arrastáveis e redimensionáveis, com cor de texto/fundo e período de exibição configuráveis.
 - **Setas**: aponte para qualquer elemento da tela com setas coloridas de ponta arrastável.
 - Linha do tempo com miniaturas, trilhas separadas para zoom e para texto/setas, e painel de propriedades contextual.
