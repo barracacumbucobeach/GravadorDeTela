@@ -1,9 +1,6 @@
 node_modules/
 dist/
 out/
-build/*.ico
-build/*.icns
-build/*.png
 *.log
 npm-debug.log*
 .DS_Store

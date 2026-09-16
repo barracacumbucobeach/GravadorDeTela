@@ -50,13 +50,33 @@ Isso instala o Electron e o `ffmpeg-static` (baixa um binário do ffmpeg para a 
 npm start
 ```
 
-## Gerar instalador (empacotar o app)
+## Ícone
+
+O ícone do app já está pronto em `build/icon.ico` (Windows, multi-resolução: 16 a 256px) e `build/icon.png` (1024×1024, usado como base para macOS/Linux). A arte-fonte editável está em `assets/icon-source.svg`. Não é preciso gerar nada manualmente — o `electron-builder` já usa esses arquivos automaticamente.
+
+## Gerar o instalador .exe (Windows)
 
 ```bash
+npm install
 npm run dist
 ```
 
-Usa o [electron-builder](https://www.electron.build/). Antes de gerar um instalador "de verdade" para distribuição, substitua os ícones de exemplo em `build/` (`icon.ico` no Windows, `icon.icns` no macOS, `icon.png` no Linux) — você pode gerá-los a partir de `assets/icon.svg`.
+Isso roda o [electron-builder](https://www.electron.build/) (já configurado em `package.json`) e gera, dentro de `dist/`:
+
+- `Gravador de Tela Setup <versão>.exe` — instalador NSIS (o que você normalmente quer distribuir)
+- `win-unpacked/Gravador de Tela.exe` — versão "portátil", já pronta para rodar sem instalar
+
+**Rode esse comando em uma máquina Windows** — é o caminho mais simples e não exige nada extra.
+
+Se preferir empacotar para Windows a partir do Linux ou macOS (cross-build), é preciso ter o [Wine](https://www.winehq.org/) instalado (`electron-builder` usa o Wine para gravar o ícone e as informações da versão dentro do `.exe`); sem o Wine, o comando falha só nessa etapa final de assinatura/recursos, mesmo já tendo empacotado o app corretamente. Nesse caso:
+
+```bash
+# Linux (Debian/Ubuntu)
+sudo apt-get install wine
+npm run dist -- --win
+```
+
+Para gerar instaladores de macOS (`.dmg`) ou Linux (`AppImage`), use `npm run dist -- --mac` ou `npm run dist -- --linux` (rodando na respectiva plataforma).
 
 ## Estrutura do projeto
 

@@ -74,6 +74,7 @@ function createWindow() {
     frame: false,
     backgroundColor: readSettings().theme === 'dark' ? '#20232a' : '#f3f3f3',
     titleBarStyle: 'hidden',
+    icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

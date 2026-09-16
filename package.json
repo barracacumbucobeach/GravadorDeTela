@@ -46,7 +46,7 @@
       "target": [
         "dmg"
       ],
-      "icon": "build/icon.icns"
+      "icon": "build/icon.png"
     },
     "linux": {
       "target": [
